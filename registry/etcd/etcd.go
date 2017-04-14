@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/url"
 	"path"
 	"runtime"
 	"strings"
@@ -236,17 +237,20 @@ func NewRegistry(opts ...registry.Option) registry.Registry {
 			continue
 		}
 
+		url, _ := url.Parse(addr)
 		if options.Secure {
-			// replace http:// with https:// if its there
-			addr = strings.Replace(addr, "http://", "https://", 1)
+			url.Scheme = "https"
+		}
 
-			// has the prefix? no... ok add it
-			if !strings.HasPrefix(addr, "https://") {
-				addr = "https://" + addr
+		if url.User != nil {
+			config.Username = url.User.Username()
+			password, ok := url.User.Password()
+			if ok {
+				config.Password = password
 			}
 		}
 
-		cAddrs = append(cAddrs, addr)
+		cAddrs = append(cAddrs, url.String())
 	}
 
 	// if we got addrs then we'll update
