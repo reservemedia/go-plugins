@@ -176,6 +176,20 @@ func (b *pubsubBroker) Subscribe(topic string, h broker.Handler, opts ...broker.
 
 	if !exists {
 		tt := b.client.Topic(topic)
+		exists, err = tt.Exists(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		if !exists {
+			// No error checking is done on CreateTopic intentionally.
+			// Create Topic returns an error if the topic already exists.
+			// Best effort attempt to create the topic before subscribing.
+			// CreateSubscription will properly error out as needed.
+			// Avoids errors from concurrent topic creation.
+			b.client.CreateTopic(ctx, topic)
+		}
+
 		subb, err := b.client.CreateSubscription(ctx, options.Queue, tt, time.Duration(0), nil)
 		if err != nil {
 			return nil, err
