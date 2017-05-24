@@ -140,6 +140,16 @@ func (b *pubsubBroker) getTopic(ctx context.Context, topic string) (*pubsub.Topi
 		return t, nil
 	}
 
+	b.tLock.Lock()
+	defer b.tLock.Unlock()
+
+	// Attempt to lookup the cache again, as another writer might have written
+	// the instance.
+	t, ok = b.topics[topic]
+	if ok && t != nil {
+		return t, nil
+	}
+
 	t = b.client.Topic(topic)
 
 	exists, err := t.Exists(ctx)
@@ -155,9 +165,7 @@ func (b *pubsubBroker) getTopic(ctx context.Context, topic string) (*pubsub.Topi
 		t = tt
 	}
 
-	b.tLock.Lock()
 	b.topics[topic] = t
-	b.tLock.Unlock()
 
 	return t, nil
 }
