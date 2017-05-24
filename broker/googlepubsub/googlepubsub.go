@@ -2,6 +2,7 @@
 package googlepubsub
 
 import (
+	"sync"
 	"time"
 
 	"cloud.google.com/go/pubsub"
@@ -15,6 +16,9 @@ import (
 type pubsubBroker struct {
 	client  *pubsub.Client
 	options broker.Options
+
+	topics map[string]*pubsub.Topic
+	tLock  *sync.RWMutex
 }
 
 // A pubsub subscriber that manages handling of messages
@@ -127,22 +131,44 @@ func (b *pubsubBroker) Options() broker.Options {
 	return b.options
 }
 
-// Publish checks if the topic exists and then publishes via google pubsub
-func (b *pubsubBroker) Publish(topic string, msg *broker.Message, opts ...broker.PublishOption) error {
-	t := b.client.Topic(topic)
-	ctx := context.Background()
+func (b *pubsubBroker) getTopic(ctx context.Context, topic string) (*pubsub.Topic, error) {
+	b.tLock.RLock()
+	t, ok := b.topics[topic]
+	b.tLock.RUnlock()
+
+	if ok && t != nil {
+		return t, nil
+	}
+
+	t = b.client.Topic(topic)
 
 	exists, err := t.Exists(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if !exists {
 		tt, err := b.client.CreateTopic(ctx, topic)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		t = tt
+	}
+
+	b.tLock.Lock()
+	b.topics[topic] = t
+	b.tLock.Unlock()
+
+	return t, nil
+}
+
+// Publish checks if the topic exists and then publishes via google pubsub
+func (b *pubsubBroker) Publish(topic string, msg *broker.Message, opts ...broker.PublishOption) error {
+	ctx := context.Background()
+
+	t, err := b.getTopic(ctx, topic)
+	if err != nil {
+		return err
 	}
 
 	m := &pubsub.Message{
@@ -237,5 +263,8 @@ func NewBroker(opts ...broker.Option) broker.Broker {
 	return &pubsubBroker{
 		client:  c,
 		options: options,
+
+		topics: make(map[string]*pubsub.Topic),
+		tLock:  new(sync.RWMutex),
 	}
 }
