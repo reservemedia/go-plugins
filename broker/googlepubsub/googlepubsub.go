@@ -41,6 +41,12 @@ func init() {
 }
 
 func (s *subscriber) run(hdlr broker.Handler) {
+	if s.options.Context != nil {
+		if max, ok := s.options.Context.Value(maxOutstandingMessagesKey{}).(int); ok {
+			s.sub.ReceiveSettings.MaxOutstandingMessages = max
+		}
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	for {
