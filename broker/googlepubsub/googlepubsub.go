@@ -230,7 +230,11 @@ func (b *pubsubBroker) Subscribe(topic string, h broker.Handler, opts ...broker.
 			b.client.CreateTopic(ctx, topic)
 		}
 
-		subb, err := b.client.CreateSubscription(ctx, options.Queue, tt, time.Duration(0), nil)
+		subb, err := b.client.CreateSubscription(ctx, options.Queue,
+			pubsub.SubscriptionConfig{
+				Topic:       tt,
+				AckDeadline: time.Duration(0),
+			})
 		if err != nil {
 			return nil, err
 		}
