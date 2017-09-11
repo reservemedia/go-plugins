@@ -41,6 +41,12 @@ func (p *publication) Ack() error {
 	return nil
 }
 
+// Nack requeues the message to the broker.
+// This is not supported in Redis and therefore results in a no-op.
+func (p *publication) Nack() error {
+	return nil
+}
+
 // subscriber proxies and handles Redis messages as broker publications.
 type subscriber struct {
 	codec  codec.Codec

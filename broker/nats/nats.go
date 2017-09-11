@@ -42,6 +42,10 @@ func (n *publication) Ack() error {
 	return nil
 }
 
+func (n *publication) Nack() error {
+	return nil
+}
+
 func (n *subscriber) Options() broker.SubscribeOptions {
 	return n.opts
 }

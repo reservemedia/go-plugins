@@ -22,6 +22,10 @@ func (m *mqttPub) Ack() error {
 	return nil
 }
 
+func (m *mqttPub) Nack() error {
+	return nil
+}
+
 func (m *mqttPub) Topic() string {
 	return m.topic
 }

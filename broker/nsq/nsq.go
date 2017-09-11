@@ -235,6 +235,11 @@ func (p *publication) Ack() error {
 	return nil
 }
 
+func (p *publication) Nack() error {
+	p.nm.RequeueWithoutBackoff(0)
+	return nil
+}
+
 func (s *subscriber) Options() broker.SubscribeOptions {
 	return s.opts
 }

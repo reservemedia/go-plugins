@@ -108,6 +108,11 @@ func (p *publication) Ack() error {
 	return nil
 }
 
+func (p *publication) Nack() error {
+	p.pm.Nack()
+	return nil
+}
+
 func (p *publication) Topic() string {
 	return p.topic
 }

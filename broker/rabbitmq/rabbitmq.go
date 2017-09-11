@@ -34,6 +34,10 @@ func (p *publication) Ack() error {
 	return p.d.Ack(false)
 }
 
+func (p *publication) Nack() error {
+	return p.d.Nack(false, true)
+}
+
 func (p *publication) Topic() string {
 	return p.t
 }

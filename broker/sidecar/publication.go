@@ -20,3 +20,7 @@ func (p *publication) Message() *broker.Message {
 func (p *publication) Ack() error {
 	return nil
 }
+
+func (p *publication) Nack() error {
+	return nil
+}
