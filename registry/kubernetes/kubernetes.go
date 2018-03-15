@@ -19,6 +19,7 @@ import (
 type kregistry struct {
 	client  client.Kubernetes
 	timeout time.Duration
+	options registry.Options
 }
 
 var (
@@ -63,6 +64,11 @@ func serviceName(name string) string {
 	}
 
 	return string(aname)
+}
+
+// Options returns the registry Options
+func (c *kregistry) Options() registry.Options {
+	return c.options
 }
 
 // Register sets a service selector label and an annotation with a
@@ -221,8 +227,8 @@ func (c *kregistry) ListServices() ([]*registry.Service, error) {
 }
 
 // Watch returns a kubernetes watcher
-func (c *kregistry) Watch() (registry.Watcher, error) {
-	return newWatcher(c)
+func (c *kregistry) Watch(opts ...registry.WatchOption) (registry.Watcher, error) {
+	return newWatcher(c, opts...)
 }
 
 func (c *kregistry) String() string {
@@ -257,6 +263,7 @@ func NewRegistry(opts ...registry.Option) registry.Registry {
 
 	return &kregistry{
 		client:  c,
+		options: options,
 		timeout: options.Timeout,
 	}
 }

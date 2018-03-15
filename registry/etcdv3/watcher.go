@@ -1,12 +1,12 @@
 package etcdv3
 
 import (
+	"context"
 	"errors"
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
 	"github.com/micro/go-micro/registry"
-	"golang.org/x/net/context"
 )
 
 type etcdv3Watcher struct {
@@ -16,7 +16,12 @@ type etcdv3Watcher struct {
 	timeout time.Duration
 }
 
-func newEtcdv3Watcher(r *etcdv3Registry, timeout time.Duration) (registry.Watcher, error) {
+func newEtcdv3Watcher(r *etcdv3Registry, timeout time.Duration, opts ...registry.WatchOption) (registry.Watcher, error) {
+	var wo registry.WatchOptions
+	for _, o := range opts {
+		o(&wo)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	stop := make(chan bool, 1)
 
@@ -25,9 +30,14 @@ func newEtcdv3Watcher(r *etcdv3Registry, timeout time.Duration) (registry.Watche
 		cancel()
 	}()
 
+	watchPath := prefix
+	if len(wo.Service) > 0 {
+		watchPath = servicePath(wo.Service) + "/"
+	}
+
 	return &etcdv3Watcher{
 		stop:    stop,
-		w:       r.client.Watch(ctx, prefix, clientv3.WithPrefix(), clientv3.WithPrevKV()),
+		w:       r.client.Watch(ctx, watchPath, clientv3.WithPrefix(), clientv3.WithPrevKV()),
 		client:  r.client,
 		timeout: timeout,
 	}, nil

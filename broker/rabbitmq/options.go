@@ -1,11 +1,13 @@
 package rabbitmq
 
 import (
+	"context"
+
 	"github.com/micro/go-micro/broker"
-	"golang.org/x/net/context"
 )
 
 type durableQueueKey struct{}
+type headersKey struct{}
 type exchangeKey struct{}
 
 // DurableQueue creates a durable queue when subscribing.
@@ -15,6 +17,16 @@ func DurableQueue() broker.SubscribeOption {
 			o.Context = context.Background()
 		}
 		o.Context = context.WithValue(o.Context, durableQueueKey{}, true)
+	}
+}
+
+// Headers adds headers used by the headers exchange
+func Headers(h map[string]interface{}) broker.SubscribeOption {
+	return func(o *broker.SubscribeOptions) {
+		if o.Context == nil {
+			o.Context = context.Background()
+		}
+		o.Context = context.WithValue(o.Context, headersKey{}, h)
 	}
 }
 

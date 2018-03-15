@@ -2,6 +2,7 @@
 package etcd
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -16,7 +17,6 @@ import (
 	etcd "github.com/coreos/etcd/client"
 	"github.com/micro/go-micro/cmd"
 	"github.com/micro/go-micro/registry"
-	"golang.org/x/net/context"
 )
 
 var (
@@ -51,6 +51,10 @@ func nodePath(s, id string) string {
 
 func servicePath(s string) string {
 	return path.Join(prefix, strings.Replace(s, "/", "-", -1))
+}
+
+func (e *etcdRegistry) Options() registry.Options {
+	return e.options
 }
 
 func (e *etcdRegistry) Deregister(s *registry.Service) error {
@@ -179,8 +183,8 @@ func (e *etcdRegistry) ListServices() ([]*registry.Service, error) {
 	return services, nil
 }
 
-func (e *etcdRegistry) Watch() (registry.Watcher, error) {
-	return newEtcdWatcher(e)
+func (e *etcdRegistry) Watch(opts ...registry.WatchOption) (registry.Watcher, error) {
+	return newEtcdWatcher(e, opts...)
 }
 
 func (e *etcdRegistry) String() string {

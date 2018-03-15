@@ -2,6 +2,7 @@
 package googlepubsub
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -9,7 +10,6 @@ import (
 	"github.com/micro/go-micro/broker"
 	"github.com/micro/go-micro/cmd"
 	"github.com/pborman/uuid"
-	"golang.org/x/net/context"
 	"google.golang.org/api/option"
 )
 
@@ -103,7 +103,6 @@ func (s *subscriber) Unsubscribe() error {
 		close(s.exit)
 		return s.sub.Delete(context.Background())
 	}
-	return nil
 }
 
 func (p *publication) Ack() error {

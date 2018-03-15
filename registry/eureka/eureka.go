@@ -6,10 +6,9 @@ package eureka
 */
 
 import (
+	"context"
 	"net/http"
 	"time"
-
-	"golang.org/x/net/context"
 
 	"github.com/hudl/fargo"
 	"github.com/micro/go-micro/cmd"
@@ -71,6 +70,10 @@ func newRegistry(opts ...registry.Option) registry.Registry {
 	}
 }
 
+func (e *eurekaRegistry) Options() registry.Options {
+	return e.opts
+}
+
 func (e *eurekaRegistry) Register(s *registry.Service, opts ...registry.RegisterOption) error {
 	instance, err := serviceToInstance(s)
 	if err != nil {
@@ -115,8 +118,8 @@ func (e *eurekaRegistry) ListServices() ([]*registry.Service, error) {
 	return services, nil
 }
 
-func (e *eurekaRegistry) Watch() (registry.Watcher, error) {
-	return newWatcher(e.conn), nil
+func (e *eurekaRegistry) Watch(opts ...registry.WatchOption) (registry.Watcher, error) {
+	return newWatcher(e.conn, opts...), nil
 }
 
 func (e *eurekaRegistry) String() string {

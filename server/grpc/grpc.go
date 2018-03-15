@@ -2,6 +2,8 @@
 package grpc
 
 import (
+	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
@@ -21,10 +23,11 @@ import (
 	meta "github.com/micro/go-micro/metadata"
 	"github.com/micro/go-micro/registry"
 	"github.com/micro/go-micro/server"
+	"github.com/micro/misc/lib/addr"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/transport"
@@ -45,7 +48,9 @@ type grpcServer struct {
 	handlers    map[string]server.Handler
 	subscribers map[*subscriber][]broker.Subscriber
 	// used for first registration
-	registered bool
+	registered     bool
+	securityOption grpc.DialOption
+	credentials    credentials.TransportCredentials
 }
 
 func init() {
@@ -54,6 +59,7 @@ func init() {
 
 func newGRPCServer(opts ...server.Option) server.Server {
 	options := newOptions(opts...)
+
 	return &grpcServer{
 		opts: options,
 		rpc: &rServer{
@@ -62,7 +68,19 @@ func newGRPCServer(opts ...server.Option) server.Server {
 		handlers:    make(map[string]server.Handler),
 		subscribers: make(map[*subscriber][]broker.Subscriber),
 		exit:        make(chan chan error),
+		credentials: getCredentiaksOption(options),
 	}
+}
+
+func getCredentiaksOption(opts server.Options) credentials.TransportCredentials {
+
+	if opts.Context != nil {
+		if v := opts.Context.Value(tlsAuth{}); v != nil {
+			tls := v.(*tls.Config)
+			return credentials.NewTLS(tls)
+		}
+	}
+	return nil
 }
 
 func (g *grpcServer) serve(l net.Listener) error {
@@ -95,13 +113,25 @@ func (g *grpcServer) serve(l net.Listener) error {
 
 		go g.accept(conn)
 	}
-
-	// uhh..
-	return nil
 }
 
-func (g *grpcServer) accept(conn net.Conn) {
-	st, err := transport.NewServerTransport("http2", conn, &transport.ServerConfig{})
+func (g *grpcServer) useTransportAuthenticator(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	if g.credentials == nil {
+		return rawConn, nil, nil
+	}
+	return g.credentials.ServerHandshake(rawConn)
+}
+
+func (g *grpcServer) accept(rawConn net.Conn) {
+
+	conn, authInfo, err := g.useTransportAuthenticator(rawConn)
+
+	if err != nil {
+		rawConn.Close()
+		return
+	}
+
+	st, err := transport.NewServerTransport("http2", conn, &transport.ServerConfig{AuthInfo: authInfo})
 	if err != nil {
 		conn.Close()
 		return
@@ -454,6 +484,15 @@ func (g *grpcServer) processStream(t transport.ServerTransport, stream *transpor
 }
 
 func (g *grpcServer) newGRPCCodec(contentType string) (grpc.Codec, error) {
+	codecs := make(map[string]grpc.Codec)
+	if g.opts.Context != nil {
+		if v := g.opts.Context.Value(codecsKey{}); v != nil {
+			codecs = v.(map[string]grpc.Codec)
+		}
+	}
+	if c, ok := codecs[contentType]; ok {
+		return c, nil
+	}
 	if c, ok := defaultGRPCCodecs[contentType]; ok {
 		return c, nil
 	}
@@ -546,7 +585,7 @@ func (g *grpcServer) Register() error {
 		host = parts[0]
 	}
 
-	addr, err := extractAddress(host)
+	addr, err := addr.Extract(host)
 	if err != nil {
 		return err
 	}
@@ -666,7 +705,7 @@ func (g *grpcServer) Deregister() error {
 		host = parts[0]
 	}
 
-	addr, err := extractAddress(host)
+	addr, err := addr.Extract(host)
 	if err != nil {
 		return err
 	}

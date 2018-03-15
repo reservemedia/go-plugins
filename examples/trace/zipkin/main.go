@@ -1,15 +1,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"time"
+
 	example "github.com/micro/examples/server/proto/example"
 	"github.com/micro/go-micro/client"
 	"github.com/micro/go-micro/cmd"
 	"github.com/micro/go-micro/metadata"
 	"github.com/micro/go-os/trace"
 	"github.com/micro/go-plugins/trace/zipkin"
-	"golang.org/x/net/context"
-	"time"
 )
 
 // publishes a message
@@ -139,7 +140,7 @@ func main() {
 		),
 	)
 
-	fmt.Println("\n--- Traced Call example ---\n")
+	fmt.Println("\n--- Traced Call example ---")
 	for i := 0; i < 10; i++ {
 		call(i)
 	}
