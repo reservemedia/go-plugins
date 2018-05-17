@@ -2,6 +2,7 @@
 package nats
 
 import (
+	"context"
 	"errors"
 	"io"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/micro/go-micro/cmd"
+	"github.com/micro/go-micro/server"
 	"github.com/micro/go-micro/transport"
 	"github.com/micro/go-micro/transport/codec/json"
 	"github.com/nats-io/nats"
@@ -17,6 +19,7 @@ import (
 type ntport struct {
 	addrs []string
 	opts  transport.Options
+	nopts nats.Options
 }
 
 type ntportClient struct {
@@ -57,6 +60,23 @@ var (
 
 func init() {
 	cmd.DefaultTransports["nats"] = NewTransport
+}
+
+func setAddrs(addrs []string) []string {
+	var cAddrs []string
+	for _, addr := range addrs {
+		if len(addr) == 0 {
+			continue
+		}
+		if !strings.HasPrefix(addr, "nats://") {
+			addr = "nats://" + addr
+		}
+		cAddrs = append(cAddrs, addr)
+	}
+	if len(cAddrs) == 0 {
+		cAddrs = []string{nats.DefaultURL}
+	}
+	return cAddrs
 }
 
 func (n *ntportClient) Send(m *transport.Message) error {
@@ -267,7 +287,6 @@ func (n *ntportListener) Accept(fn func(transport.Socket)) error {
 		sock.Unlock()
 
 	}
-	return lerr
 }
 
 func (n *ntport) Dial(addr string, dialOpts ...transport.DialOption) (transport.Client, error) {
@@ -279,7 +298,7 @@ func (n *ntport) Dial(addr string, dialOpts ...transport.DialOption) (transport.
 		o(&dopts)
 	}
 
-	opts := nats.DefaultOptions
+	opts := n.nopts
 	opts.Servers = n.addrs
 	opts.Secure = n.opts.Secure
 	opts.TLSConfig = n.opts.TLSConfig
@@ -311,7 +330,7 @@ func (n *ntport) Dial(addr string, dialOpts ...transport.DialOption) (transport.
 }
 
 func (n *ntport) Listen(addr string, listenOpts ...transport.ListenOption) (transport.Listener, error) {
-	opts := nats.DefaultOptions
+	opts := n.nopts
 	opts.Servers = n.addrs
 	opts.Secure = n.opts.Secure
 	opts.TLSConfig = n.opts.TLSConfig
@@ -326,8 +345,24 @@ func (n *ntport) Listen(addr string, listenOpts ...transport.ListenOption) (tran
 		return nil, err
 	}
 
+	// in case address has not been specifically set, create a new nats.Inbox()
+	if addr == server.DefaultAddress {
+		addr = nats.NewInbox()
+	}
+
+	// make sure addr subject is not empty
+	if len(addr) == 0 {
+		return nil, errors.New("addr (nats subject) must not be empty")
+	}
+
+	// since NATS implements a text based protocol, no space characters are
+	// admitted in the addr (subject name)
+	if strings.Contains(addr, " ") {
+		return nil, errors.New("addr (nats subject) must not contain space characters")
+	}
+
 	return &ntportListener{
-		addr: nats.NewInbox(),
+		addr: addr,
 		conn: c,
 		exit: make(chan bool, 1),
 		so:   make(map[string]*ntportSocket),
@@ -340,34 +375,45 @@ func (n *ntport) String() string {
 }
 
 func NewTransport(opts ...transport.Option) transport.Transport {
+
 	options := transport.Options{
 		// Default codec
 		Codec:   json.NewCodec(),
 		Timeout: DefaultTimeout,
+		Context: context.Background(),
 	}
 
 	for _, o := range opts {
 		o(&options)
 	}
 
-	var cAddrs []string
-
-	for _, addr := range options.Addrs {
-		if len(addr) == 0 {
-			continue
-		}
-		if !strings.HasPrefix(addr, "nats://") {
-			addr = "nats://" + addr
-		}
-		cAddrs = append(cAddrs, addr)
+	natsOptions := nats.GetDefaultOptions()
+	if n, ok := options.Context.Value(optionsKey{}).(nats.Options); ok {
+		natsOptions = n
 	}
 
-	if len(cAddrs) == 0 {
-		cAddrs = []string{nats.DefaultURL}
+	// transport.Options have higher priority than nats.Options
+	// only if Addrs, Secure or TLSConfig were not set through a transport.Option
+	// we read them from nats.Option
+	if len(options.Addrs) == 0 {
+		options.Addrs = natsOptions.Servers
 	}
+
+	if !options.Secure {
+		options.Secure = natsOptions.Secure
+	}
+
+	if options.TLSConfig == nil {
+		options.TLSConfig = natsOptions.TLSConfig
+	}
+
+	// check & add nats:// prefix (this makes also sure that the addresses
+	// stored in natsRegistry.addrs and options.Addrs are identical)
+	options.Addrs = setAddrs(options.Addrs)
 
 	return &ntport{
-		addrs: cAddrs,
+		addrs: options.Addrs,
 		opts:  options,
+		nopts: natsOptions,
 	}
 }

@@ -16,7 +16,6 @@ var actions = []string{
 }
 
 func TestBodyWatcher(t *testing.T) {
-
 	// set up server with handler to flush strings from ch.
 	ch := make(chan string)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -29,7 +28,6 @@ func TestBodyWatcher(t *testing.T) {
 		flusher.Flush()
 
 		for v := range ch {
-			// log.Print("booooom")
 			fmt.Fprintf(w, "%s\n", v)
 			flusher.Flush()
 			time.Sleep(10 * time.Millisecond)
@@ -69,7 +67,5 @@ func TestBodyWatcher(t *testing.T) {
 
 	// stop should clean up all channels.
 	w.Stop()
-	// ts.CloseClientConnections()
-
 	close(ch)
 }

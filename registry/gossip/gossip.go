@@ -37,6 +37,7 @@ type delegate struct {
 type gossipRegistry struct {
 	broadcasts *memberlist.TransmitLimitedQueue
 	updates    chan *update
+	options    registry.Options
 
 	sync.RWMutex
 	services map[string][]*registry.Service
@@ -226,11 +227,11 @@ func (d *delegate) MergeRemoteState(buf []byte, join bool) {
 func (m *gossipRegistry) publish(action string, services []*registry.Service) {
 	m.s.RLock()
 	for _, sub := range m.subs {
-		go func() {
+		go func(sub chan *registry.Result) {
 			for _, service := range services {
 				sub <- &registry.Result{Action: action, Service: service}
 			}
-		}()
+		}(sub)
 	}
 	m.s.RUnlock()
 }
@@ -341,6 +342,10 @@ func (m *gossipRegistry) run() {
 	}
 }
 
+func (m *gossipRegistry) Options() registry.Options {
+	return m.options
+}
+
 func (m *gossipRegistry) Register(s *registry.Service, opts ...registry.RegisterOption) error {
 	m.Lock()
 	if service, ok := m.services[s.Name]; !ok {
@@ -418,9 +423,9 @@ func (m *gossipRegistry) ListServices() ([]*registry.Service, error) {
 	return services, nil
 }
 
-func (m *gossipRegistry) Watch() (registry.Watcher, error) {
+func (m *gossipRegistry) Watch(opts ...registry.WatchOption) (registry.Watcher, error) {
 	n, e := m.subscribe()
-	return newGossipWatcher(n, e)
+	return newGossipWatcher(n, e, opts...)
 }
 
 func (m *gossipRegistry) String() string {
@@ -451,6 +456,7 @@ func NewRegistry(opts ...registry.Option) registry.Registry {
 	}
 
 	mr := &gossipRegistry{
+		options:    options,
 		broadcasts: broadcasts,
 		services:   make(map[string][]*registry.Service),
 		updates:    updates,

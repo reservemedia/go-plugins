@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/micro/go-awsxray"
+	"context"
+	"github.com/asim/go-awsxray"
 	"github.com/micro/go-micro/errors"
 	"github.com/micro/go-micro/metadata"
-	"golang.org/x/net/context"
 )
 
 // getHTTP returns a http struct

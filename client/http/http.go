@@ -4,6 +4,7 @@ package http
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -21,8 +22,6 @@ import (
 	"github.com/micro/go-micro/registry"
 	"github.com/micro/go-micro/selector"
 	"github.com/micro/go-micro/transport"
-
-	"golang.org/x/net/context"
 )
 
 type httpClient struct {
@@ -32,6 +31,27 @@ type httpClient struct {
 
 func init() {
 	cmd.DefaultClients["http"] = NewClient
+}
+
+func (h *httpClient) next(request client.Request, opts client.CallOptions) (selector.Next, error) {
+	// return remote address
+	if len(opts.Address) > 0 {
+		return func() (*registry.Node, error) {
+			return &registry.Node{
+				Address: opts.Address,
+			}, nil
+		}, nil
+	}
+
+	// get next nodes from the selector
+	next, err := h.opts.Selector.Select(request.Service(), opts.SelectOptions...)
+	if err != nil && err == selector.ErrNotFound {
+		return nil, errors.NotFound("go.micro.client", err.Error())
+	} else if err != nil {
+		return nil, errors.InternalServerError("go.micro.client", err.Error())
+	}
+
+	return next, nil
 }
 
 func (h *httpClient) call(ctx context.Context, address string, req client.Request, rsp interface{}, opts client.CallOptions) error {
@@ -96,7 +116,7 @@ func (h *httpClient) call(ctx context.Context, address string, req client.Reques
 	return nil
 }
 
-func (h *httpClient) stream(ctx context.Context, address string, req client.Request, opts client.CallOptions) (client.Streamer, error) {
+func (h *httpClient) stream(ctx context.Context, address string, req client.Request, opts client.CallOptions) (client.Stream, error) {
 	header := make(http.Header)
 	if md, ok := metadata.FromContext(ctx); ok {
 		for k, v := range md {
@@ -160,20 +180,12 @@ func (h *httpClient) Options() client.Options {
 	return h.opts
 }
 
-func (h *httpClient) NewPublication(topic string, msg interface{}) client.Publication {
-	return newHTTPPublication(topic, msg, "application/proto")
+func (h *httpClient) NewMessage(topic string, msg interface{}, opts ...client.MessageOption) client.Message {
+	return newHTTPMessage(topic, msg, "application/proto", opts...)
 }
 
 func (h *httpClient) NewRequest(service, method string, req interface{}, reqOpts ...client.RequestOption) client.Request {
 	return newHTTPRequest(service, method, req, h.opts.ContentType, reqOpts...)
-}
-
-func (h *httpClient) NewProtoRequest(service, method string, req interface{}, reqOpts ...client.RequestOption) client.Request {
-	return newHTTPRequest(service, method, req, "application/proto", reqOpts...)
-}
-
-func (h *httpClient) NewJsonRequest(service, method string, req interface{}, reqOpts ...client.RequestOption) client.Request {
-	return newHTTPRequest(service, method, req, "application/json", reqOpts...)
 }
 
 func (h *httpClient) Call(ctx context.Context, req client.Request, rsp interface{}, opts ...client.CallOption) error {
@@ -184,11 +196,9 @@ func (h *httpClient) Call(ctx context.Context, req client.Request, rsp interface
 	}
 
 	// get next nodes from the selector
-	next, err := h.opts.Selector.Select(req.Service(), callOpts.SelectOptions...)
-	if err != nil && err == selector.ErrNotFound {
-		return errors.NotFound("go.micro.client", err.Error())
-	} else if err != nil {
-		return errors.InternalServerError("go.micro.client", err.Error())
+	next, err := h.next(req, callOpts)
+	if err != nil {
+		return err
 	}
 
 	// check if we already have a deadline
@@ -284,15 +294,7 @@ func (h *httpClient) Call(ctx context.Context, req client.Request, rsp interface
 	return gerr
 }
 
-func (h *httpClient) CallRemote(ctx context.Context, addr string, req client.Request, rsp interface{}, opts ...client.CallOption) error {
-	callOpts := h.opts.CallOptions
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
-	return h.call(ctx, addr, req, rsp, callOpts)
-}
-
-func (h *httpClient) Stream(ctx context.Context, req client.Request, opts ...client.CallOption) (client.Streamer, error) {
+func (h *httpClient) Stream(ctx context.Context, req client.Request, opts ...client.CallOption) (client.Stream, error) {
 	// make a copy of call opts
 	callOpts := h.opts.CallOptions
 	for _, opt := range opts {
@@ -300,11 +302,9 @@ func (h *httpClient) Stream(ctx context.Context, req client.Request, opts ...cli
 	}
 
 	// get next nodes from the selector
-	next, err := h.opts.Selector.Select(req.Service(), callOpts.SelectOptions...)
-	if err != nil && err == selector.ErrNotFound {
-		return nil, errors.NotFound("go.micro.client", err.Error())
-	} else if err != nil {
-		return nil, errors.InternalServerError("go.micro.client", err.Error())
+	next, err := h.next(req, callOpts)
+	if err != nil {
+		return nil, err
 	}
 
 	// check if we already have a deadline
@@ -326,7 +326,7 @@ func (h *httpClient) Stream(ctx context.Context, req client.Request, opts ...cli
 	default:
 	}
 
-	call := func(i int) (client.Streamer, error) {
+	call := func(i int) (client.Stream, error) {
 		// call backoff first. Someone may want an initial start delay
 		t, err := callOpts.Backoff(ctx, req, i)
 		if err != nil {
@@ -356,7 +356,7 @@ func (h *httpClient) Stream(ctx context.Context, req client.Request, opts ...cli
 	}
 
 	type response struct {
-		stream client.Streamer
+		stream client.Stream
 		err    error
 	}
 
@@ -394,15 +394,7 @@ func (h *httpClient) Stream(ctx context.Context, req client.Request, opts ...cli
 	return nil, grr
 }
 
-func (h *httpClient) StreamRemote(ctx context.Context, addr string, req client.Request, opts ...client.CallOption) (client.Streamer, error) {
-	callOpts := h.opts.CallOptions
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
-	return h.stream(ctx, addr, req, callOpts)
-}
-
-func (h *httpClient) Publish(ctx context.Context, p client.Publication, opts ...client.PublishOption) error {
+func (h *httpClient) Publish(ctx context.Context, p client.Message, opts ...client.PublishOption) error {
 	md, ok := metadata.FromContext(ctx)
 	if !ok {
 		md = make(map[string]string)
@@ -415,7 +407,7 @@ func (h *httpClient) Publish(ctx context.Context, p client.Publication, opts ...
 	}
 
 	b := &buffer{bytes.NewBuffer(nil)}
-	if err := cf(b).Write(&codec.Message{Type: codec.Publication}, p.Message()); err != nil {
+	if err := cf(b).Write(&codec.Message{Type: codec.Publication}, p.Payload()); err != nil {
 		return errors.InternalServerError("go.micro.client", err.Error())
 	}
 

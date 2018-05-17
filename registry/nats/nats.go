@@ -2,7 +2,7 @@
 package nats
 
 import (
-	"crypto/tls"
+	"context"
 	"encoding/json"
 	"strings"
 	"sync"
@@ -14,8 +14,11 @@ import (
 )
 
 type natsRegistry struct {
-	addrs []string
-	opts  registry.Options
+	addrs      []string
+	opts       registry.Options
+	nopts      nats.Options
+	queryTopic string
+	watchTopic string
 
 	sync.RWMutex
 	conn      *nats.Conn
@@ -23,18 +26,16 @@ type natsRegistry struct {
 	listeners map[string]chan bool
 }
 
+var (
+	defaultQueryTopic = "micro.registry.nats.query"
+	defaultWatchTopic = "micro.registry.nats.watch"
+)
+
 func init() {
 	cmd.DefaultRegistries["nats"] = NewRegistry
 }
 
-var (
-	QueryTopic = "micro.registry.nats.query"
-	WatchTopic = "micro.registry.nats.watch"
-
-	DefaultTimeout = time.Millisecond * 100
-)
-
-func newConn(addrs []string, secure bool, config *tls.Config) (*nats.Conn, error) {
+func setAddrs(addrs []string) []string {
 	var cAddrs []string
 	for _, addr := range addrs {
 		if len(addr) == 0 {
@@ -48,34 +49,37 @@ func newConn(addrs []string, secure bool, config *tls.Config) (*nats.Conn, error
 	if len(cAddrs) == 0 {
 		cAddrs = []string{nats.DefaultURL}
 	}
+	return cAddrs
+}
 
-	opts := nats.DefaultOptions
-	opts.Servers = cAddrs
-	opts.Secure = secure
-	opts.TLSConfig = config
+func (n *natsRegistry) newConn() (*nats.Conn, error) {
+	opts := n.nopts
+	opts.Servers = n.addrs
+	opts.Secure = n.opts.Secure
+	opts.TLSConfig = n.opts.TLSConfig
 
 	// secure might not be set
-	if config != nil {
+	if opts.TLSConfig != nil {
 		opts.Secure = true
 	}
 
-	c, err := opts.Connect()
-	if err != nil {
-		return nil, err
-	}
-	return c, err
+	return opts.Connect()
 }
 
 func (n *natsRegistry) getConn() (*nats.Conn, error) {
 	n.Lock()
 	defer n.Unlock()
-	if n.conn == nil {
-		c, err := newConn(n.addrs, n.opts.Secure, n.opts.TLSConfig)
-		if err != nil {
-			return nil, err
-		}
-		n.conn = c
+
+	if n.conn != nil {
+		return n.conn, nil
 	}
+
+	c, err := n.newConn()
+	if err != nil {
+		return nil, err
+	}
+	n.conn = c
+
 	return n.conn, nil
 }
 
@@ -96,7 +100,7 @@ func (n *natsRegistry) register(s *registry.Service) error {
 		listener := make(chan bool)
 
 		// create a subscriber that responds to queries
-		sub, err := conn.Subscribe(QueryTopic, func(m *nats.Msg) {
+		sub, err := conn.Subscribe(n.queryTopic, func(m *nats.Msg) {
 			var result *registry.Result
 
 			if err := json.Unmarshal(m.Data, &result); err != nil {
@@ -201,7 +205,7 @@ func (n *natsRegistry) query(s string, quorum int) ([]*registry.Service, error) 
 		}
 		select {
 		case response <- service:
-		case <-time.After(DefaultTimeout):
+		case <-time.After(n.opts.Timeout):
 		}
 	})
 	if err != nil {
@@ -215,7 +219,7 @@ func (n *natsRegistry) query(s string, quorum int) ([]*registry.Service, error) 
 	}
 
 	if err := conn.PublishMsg(&nats.Msg{
-		Subject: QueryTopic,
+		Subject: n.queryTopic,
 		Reply:   inbox,
 		Data:    b,
 	}); err != nil {
@@ -254,6 +258,10 @@ loop:
 	return services, nil
 }
 
+func (n *natsRegistry) Options() registry.Options {
+	return n.opts
+}
+
 func (n *natsRegistry) Register(s *registry.Service, opts ...registry.RegisterOption) error {
 	if err := n.register(s); err != nil {
 		return err
@@ -269,7 +277,7 @@ func (n *natsRegistry) Register(s *registry.Service, opts ...registry.RegisterOp
 		return err
 	}
 
-	return conn.Publish(WatchTopic, b)
+	return conn.Publish(n.watchTopic, b)
 }
 
 func (n *natsRegistry) Deregister(s *registry.Service) error {
@@ -286,7 +294,7 @@ func (n *natsRegistry) Deregister(s *registry.Service) error {
 	if err != nil {
 		return err
 	}
-	return conn.Publish(WatchTopic, b)
+	return conn.Publish(n.watchTopic, b)
 }
 
 func (n *natsRegistry) GetService(s string) ([]*registry.Service, error) {
@@ -317,18 +325,23 @@ func (n *natsRegistry) ListServices() ([]*registry.Service, error) {
 	return services, nil
 }
 
-func (n *natsRegistry) Watch() (registry.Watcher, error) {
+func (n *natsRegistry) Watch(opts ...registry.WatchOption) (registry.Watcher, error) {
 	conn, err := n.getConn()
 	if err != nil {
 		return nil, err
 	}
 
-	sub, err := conn.SubscribeSync(WatchTopic)
+	sub, err := conn.SubscribeSync(n.watchTopic)
 	if err != nil {
 		return nil, err
 	}
 
-	return &natsWatcher{sub}, nil
+	var wo registry.WatchOptions
+	for _, o := range opts {
+		o(&wo)
+	}
+
+	return &natsWatcher{sub, wo}, nil
 }
 
 func (n *natsRegistry) String() string {
@@ -337,15 +350,55 @@ func (n *natsRegistry) String() string {
 
 func NewRegistry(opts ...registry.Option) registry.Registry {
 	options := registry.Options{
-		Timeout: DefaultTimeout,
+		Timeout: time.Millisecond * 100,
+		Context: context.Background(),
 	}
+
 	for _, o := range opts {
 		o(&options)
 	}
+
+	natsOptions := nats.GetDefaultOptions()
+	if n, ok := options.Context.Value(optionsKey{}).(nats.Options); ok {
+		natsOptions = n
+	}
+
+	queryTopic := defaultQueryTopic
+	if qt, ok := options.Context.Value(queryTopicKey{}).(string); ok {
+		queryTopic = qt
+	}
+
+	watchTopic := defaultWatchTopic
+	if wt, ok := options.Context.Value(watchTopicKey{}).(string); ok {
+		watchTopic = wt
+	}
+
+	// registry.Options have higher priority than nats.Options
+	// only if Addrs, Secure or TLSConfig were not set through a registry.Option
+	// we read them from nats.Option
+	if len(options.Addrs) == 0 {
+		options.Addrs = natsOptions.Servers
+	}
+
+	if !options.Secure {
+		options.Secure = natsOptions.Secure
+	}
+
+	if options.TLSConfig == nil {
+		options.TLSConfig = natsOptions.TLSConfig
+	}
+
+	// check & add nats:// prefix (this makes also sure that the addresses
+	// stored in natsRegistry.addrs and options.Addrs are identical)
+	options.Addrs = setAddrs(options.Addrs)
+
 	return &natsRegistry{
-		addrs:     options.Addrs,
-		opts:      options,
-		services:  make(map[string][]*registry.Service),
-		listeners: make(map[string]chan bool),
+		addrs:      options.Addrs,
+		opts:       options,
+		nopts:      natsOptions,
+		queryTopic: queryTopic,
+		watchTopic: watchTopic,
+		services:   make(map[string][]*registry.Service),
+		listeners:  make(map[string]chan bool),
 	}
 }

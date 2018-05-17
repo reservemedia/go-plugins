@@ -7,13 +7,12 @@ package grpc
 // Meh, we need to get rid of this shit
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"sync"
 	"unicode"
 	"unicode/utf8"
-
-	"golang.org/x/net/context"
 
 	"github.com/micro/go-log"
 	"github.com/micro/go-micro/server"
@@ -98,7 +97,7 @@ func prepareMethod(method reflect.Method) *methodType {
 
 	if stream {
 		// check stream type
-		streamType := reflect.TypeOf((*server.Streamer)(nil)).Elem()
+		streamType := reflect.TypeOf((*server.Stream)(nil)).Elem()
 		if !argType.Implements(streamType) {
 			log.Log(mname, "argument does not implement Streamer interface:", argType)
 			return nil

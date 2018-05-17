@@ -4,9 +4,9 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/micro/go-config"
+	"github.com/micro/go-config/source/file"
 	"github.com/micro/go-log"
-	"github.com/micro/go-os/config"
-	"github.com/micro/go-os/config/source/file"
 	"github.com/micro/go-plugins/micro/router"
 )
 
@@ -19,7 +19,7 @@ func main() {
 	defer l.Close()
 
 	// Create Config Source
-	f := file.NewSource(config.SourceName("routes.json"))
+	f := file.NewSource(file.WithPath("routes.json"))
 	conf := config.NewConfig(config.WithSource(f))
 
 	// Create Router

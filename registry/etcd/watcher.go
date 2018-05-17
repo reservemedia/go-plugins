@@ -1,22 +1,26 @@
 package etcd
 
 import (
-	"errors"
+	"context"
 	"sync"
 
 	etcd "github.com/coreos/etcd/client"
 	"github.com/micro/go-micro/registry"
-	"golang.org/x/net/context"
 )
 
 type etcdWatcher struct {
 	ctx  context.Context
-	once sync.Once
+	once *sync.Once
 	stop chan bool
 	w    etcd.Watcher
 }
 
-func newEtcdWatcher(r *etcdRegistry) (registry.Watcher, error) {
+func newEtcdWatcher(r *etcdRegistry, opts ...registry.WatchOption) (registry.Watcher, error) {
+	var wo registry.WatchOptions
+	for _, o := range opts {
+		o(&wo)
+	}
+
 	var once sync.Once
 	ctx, cancel := context.WithCancel(context.Background())
 	stop := make(chan bool, 1)
@@ -26,10 +30,17 @@ func newEtcdWatcher(r *etcdRegistry) (registry.Watcher, error) {
 		cancel()
 	}()
 
+	// watch everything by default
+	watchPath := prefix
+	// watch a service
+	if len(wo.Service) > 0 {
+		watchPath = servicePath(wo.Service)
+	}
+
 	return &etcdWatcher{
 		ctx:  ctx,
-		w:    r.client.Watcher(prefix, &etcd.WatcherOptions{AfterIndex: 0, Recursive: true}),
-		once: once,
+		w:    r.client.Watcher(watchPath, &etcd.WatcherOptions{AfterIndex: 0, Recursive: true}),
+		once: &once,
 		stop: stop,
 	}, nil
 }
@@ -74,7 +85,6 @@ func (ew *etcdWatcher) Next() (*registry.Result, error) {
 		}
 
 	}
-	return nil, errors.New("could not get next")
 }
 
 func (ew *etcdWatcher) Stop() {

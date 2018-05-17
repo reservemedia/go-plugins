@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"reflect"
 
@@ -10,7 +11,6 @@ import (
 	"github.com/micro/go-micro/metadata"
 	"github.com/micro/go-micro/registry"
 	"github.com/micro/go-micro/server"
-	"golang.org/x/net/context"
 )
 
 const (
@@ -205,7 +205,7 @@ func (g *grpcServer) createSubHandler(sb *subscriber, opts server.Options) broke
 				return err
 			}
 
-			fn := func(ctx context.Context, msg server.Publication) error {
+			fn := func(ctx context.Context, msg server.Message) error {
 				var vals []reflect.Value
 				if sb.typ.Kind() != reflect.Func {
 					vals = append(vals, sb.rcvr)
@@ -214,7 +214,7 @@ func (g *grpcServer) createSubHandler(sb *subscriber, opts server.Options) broke
 					vals = append(vals, reflect.ValueOf(ctx))
 				}
 
-				vals = append(vals, reflect.ValueOf(msg.Message()))
+				vals = append(vals, reflect.ValueOf(msg.Payload()))
 
 				returnValues := handler.method.Call(vals)
 				if err := returnValues[0].Interface(); err != nil {
@@ -230,10 +230,10 @@ func (g *grpcServer) createSubHandler(sb *subscriber, opts server.Options) broke
 			g.wg.Add(1)
 			go func() {
 				defer g.wg.Done()
-				fn(ctx, &rpcPublication{
+				fn(ctx, &rpcMessage{
 					topic:       sb.topic,
 					contentType: ct,
-					message:     req.Interface(),
+					payload:     req.Interface(),
 				})
 			}()
 		}

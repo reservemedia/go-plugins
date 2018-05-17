@@ -32,29 +32,39 @@ func (wr *bodyWatcher) Stop() {
 }
 
 func (wr *bodyWatcher) stream() {
-	scanner := bufio.NewScanner(wr.res.Body)
+	reader := bufio.NewReader(wr.res.Body)
 
 	// ignore first few messages from stream,
 	// as they are usually old.
 	ignore := true
+
 	go func() {
 		<-time.After(time.Second)
 		ignore = false
 	}()
 
 	go func() {
-		for scanner.Scan() {
+		for {
+			// read a line
+			b, err := reader.ReadBytes('\n')
+			if err != nil {
+				return
+			}
+
+			// ignore for the first second
 			if ignore {
 				continue
 			}
 
+			// send the event
 			var event Event
-			err := json.Unmarshal(scanner.Bytes(), &event)
-			if err != nil {
+			if err := json.Unmarshal(b, &event); err != nil {
 				continue
 			}
 			wr.results <- event
 		}
+
+		// stop the watcher
 		wr.Stop()
 	}()
 }

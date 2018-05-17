@@ -2,16 +2,18 @@
 package memory
 
 import (
+	"context"
 	"sync"
 	"time"
 
 	"github.com/micro/go-micro/cmd"
 	"github.com/micro/go-micro/registry"
 	"github.com/pborman/uuid"
-	"golang.org/x/net/context"
 )
 
 type memoryRegistry struct {
+	options registry.Options
+
 	sync.RWMutex
 	services map[string][]*registry.Service
 	watchers map[string]*memoryWatcher
@@ -47,6 +49,10 @@ func (m *memoryRegistry) watch(r *registry.Result) {
 			}
 		}
 	}
+}
+
+func (m *memoryRegistry) Options() registry.Options {
+	return m.options
 }
 
 func (m *memoryRegistry) GetService(service string) ([]*registry.Service, error) {
@@ -90,11 +96,17 @@ func (m *memoryRegistry) Deregister(s *registry.Service) error {
 	return nil
 }
 
-func (m *memoryRegistry) Watch() (registry.Watcher, error) {
+func (m *memoryRegistry) Watch(opts ...registry.WatchOption) (registry.Watcher, error) {
+	var wo registry.WatchOptions
+	for _, o := range opts {
+		o(&wo)
+	}
+
 	w := &memoryWatcher{
 		exit: make(chan bool),
 		res:  make(chan *registry.Result),
 		id:   uuid.NewUUID().String(),
+		wo:   wo,
 	}
 
 	m.Lock()
@@ -122,6 +134,7 @@ func NewRegistry(opts ...registry.Option) registry.Registry {
 	}
 
 	return &memoryRegistry{
+		options:  options,
 		services: services,
 		watchers: make(map[string]*memoryWatcher),
 	}

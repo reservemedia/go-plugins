@@ -6,10 +6,16 @@ import (
 	"github.com/micro/go-micro/registry"
 )
 
-type noopRegistry struct{}
+type noopRegistry struct {
+	options registry.Options
+}
 
 func init() {
 	cmd.DefaultRegistries["noop"] = NewRegistry
+}
+
+func (m *noopRegistry) Options() registry.Options {
+	return m.options
 }
 
 func (m *noopRegistry) GetService(service string) ([]*registry.Service, error) {
@@ -28,7 +34,7 @@ func (m *noopRegistry) Deregister(s *registry.Service) error {
 	return nil
 }
 
-func (m *noopRegistry) Watch() (registry.Watcher, error) {
+func (m *noopRegistry) Watch(opts ...registry.WatchOption) (registry.Watcher, error) {
 	return &noopWatcher{exit: make(chan bool)}, nil
 }
 
@@ -37,5 +43,9 @@ func (m *noopRegistry) String() string {
 }
 
 func NewRegistry(opts ...registry.Option) registry.Registry {
-	return &noopRegistry{}
+	var options registry.Options
+	for _, o := range opts {
+		o(&options)
+	}
+	return &noopRegistry{options}
 }

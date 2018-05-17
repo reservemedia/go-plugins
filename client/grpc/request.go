@@ -48,6 +48,11 @@ func newGRPCRequest(service, method string, request interface{}, contentType str
 		o(&opts)
 	}
 
+	// set the content-type specified
+	if len(opts.ContentType) > 0 {
+		contentType = opts.ContentType
+	}
+
 	return &grpcRequest{
 		service:     service,
 		method:      method,

@@ -1,37 +1,38 @@
-# Go Plugins [![License](https://img.shields.io/:license-apache-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![GoDoc](https://godoc.org/github.com/micro/go-plugins?status.svg)](https://godoc.org/github.com/micro/go-plugins) [![Travis CI](https://travis-ci.org/micro/go-plugins.svg?branch=master)](https://travis-ci.org/micro/go-plugins) [![Go Report Card](https://goreportcard.com/badge/micro/go-plugins)](https://goreportcard.com/report/github.com/micro/go-plugins)
+# Plugins [![License](https://img.shields.io/:license-apache-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![GoDoc](https://godoc.org/github.com/micro/go-plugins?status.svg)](https://godoc.org/github.com/micro/go-plugins) [![Travis CI](https://travis-ci.org/micro/go-plugins.svg?branch=master)](https://travis-ci.org/micro/go-plugins) [![Go Report Card](https://goreportcard.com/badge/micro/go-plugins)](https://goreportcard.com/report/github.com/micro/go-plugins)
 
-A repository for go-micro plugins.
+A repository for micro plugins
+
+## Overview
+
+Micro tooling is built on a powerful pluggable architecture. Plugins can be swapped out with zero code changes.
+This repository contains plugins for all micro related tools. Read on for further info.
 
 Check out the [Micro on NATS](https://micro.mu/blog/2016/04/11/micro-on-nats.html) blog post to learn more about plugins.
 
-Follow us on Twitter at [@MicroHQ](https://twitter.com/microhq), join the [Slack](https://micro-services.slack.com) community [here](http://slack.micro.mu/) or 
-check out the [Mailing List](https://groups.google.com/forum/#!forum/microhq).
+Follow us on [Twitter](https://twitter.com/microhq) or join the [Slack](http://slack.micro.mu/) community.
 
-## What's here?
+## Getting Started
 
-Directory	|	Description
----		|	---
-Broker		|	Asynchronous Pub/Sub; NATS, NSQ, RabbitMQ, Kafka	
-Client		|	Alternative clients; gRPC, HTTP
-Codec		|	RPC Encoding; BSON, Mercury
-KV		|	Key-Value; Memcached, Redis
-Metrics		|	Instrumentation; Statsd, Telegraf, Prometheus
-Micro		|	Micro Toolkit Plugins
-Registry	|	Service Discovery; Etcd, Gossip, NATS
-Selector	|	Node Selection; Label, Mercury
-Server		|	Alternative servers; gRPC, HTTP
-Sync		|	Locking/Leadership election; Consul, Etcd
-Trace		|	Distributed tracing; Zipkin
-Transport	|	Synchronous Request/Response; NATS, RabbitMQ
-Wrappers	|	Client/Server middleware; Circuit Breakers, Rate Limit
+* [Contents](#contents)
+* [Usage](#usage)
+* [Build Pattern](#build-pattern)
+* [Contributions](#contributions)
 
+## Contents
 
-## Community Contributions
+Contents of this repository:
 
-Feature		|	Description		|	Author
-----------	|	------------		|	--------
-[Registry/Kubernetes](https://godoc.org/github.com/micro/go-plugins/registry/kubernetes)	|	Service discovery via the Kubernetes API	|	[@nickjackson](https://github.com/nickjackson)
-[Registry/Zookeeper](https://godoc.org/github.com/micro/go-plugins/registry/zookeeper)	|	Service discovery using Zookeeper	|	[@HeavyHorst](https://github.com/HeavyHorst)
+| Directory | Description                                          |
+| --------- | ---------------------------------------------------- |
+| Broker    | PubSub messaging; NATS, NSQ, RabbitMQ, Kafka         |
+| Client    | RPC Clients; gRPC, HTTP                              |
+| Codec     | Message Encoding; BSON, Mercury                      |
+| Micro     | Micro Toolkit Plugins                                |
+| Registry  | Service Discovery; Etcd, Gossip, NATS                |
+| Selector  | Load balancing; Label, Cache, Static                 |
+| Server    | RPC Servers; gRPC, HTTP                              |
+| Transport | Bidirectional Streaming; NATS, RabbitMQ              |
+| Wrappers  | Middleware; Circuit Breakers, Rate Limiting, Tracing |
 
 ## Usage
 
@@ -53,7 +54,7 @@ func main() {
 }
 ```
 
-The same is achieved when calling ```service.Init```
+The same is achieved when calling `service.Init`
 
 ```go
 import (
@@ -106,10 +107,12 @@ func main() {
 
 ## Build Pattern
 
-You may want to swap out plugins using automation or add plugins to the micro toolkit. 
-An easy way to do this is by maintaining a separate file for plugin imports and including it during the build.
+An anti-pattern is modifying the `main.go` file to include plugins. Best practice recommendation is to include
+plugins in a separate file and rebuild with it included. This allows for automation of building plugins and
+clean separation of concerns.
 
 Create file plugins.go
+
 ```go
 package main
 
@@ -121,11 +124,25 @@ import (
 ```
 
 Build with plugins.go
+
 ```shell
 go build -o service main.go plugins.go
 ```
 
 Run with plugins
+
 ```shell
-service --broker=rabbitmq --registry=kubernetes --transport=nats
+MICRO_BROKER=rabbitmq \
+MICRO_REGISTRY=kubernetes \
+MICRO_TRANSPORT=nats \
+service
 ```
+
+## Contributions
+
+A few contributions by others
+
+| Feature                                                                                  | Description                              | Author                                         |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------- | ---------------------------------------------- |
+| [Registry/Kubernetes](https://godoc.org/github.com/micro/go-plugins/registry/kubernetes) | Service discovery via the Kubernetes API | [@nickjackson](https://github.com/nickjackson) |
+| [Registry/Zookeeper](https://godoc.org/github.com/micro/go-plugins/registry/zookeeper)   | Service discovery using Zookeeper        | [@HeavyHorst](https://github.com/HeavyHorst)   |

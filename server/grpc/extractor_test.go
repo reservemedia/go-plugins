@@ -1,11 +1,11 @@
 package grpc
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
 	"github.com/micro/go-micro/registry"
-	"golang.org/x/net/context"
 )
 
 type testHandler struct{}
@@ -16,25 +16,6 @@ type testResponse struct{}
 
 func (t *testHandler) Test(ctx context.Context, req *testRequest, rsp *testResponse) error {
 	return nil
-}
-
-func TestExtractAddress(t *testing.T) {
-	data := []struct {
-		Input  string
-		Output string
-	}{
-		{"10.0.0.1", "10.0.0.1"},
-	}
-
-	for _, d := range data {
-		addr, err := extractAddress(d.Input)
-		if err != nil {
-			t.Errorf("Expected %s: %v", d.Output, err)
-		}
-		if addr != d.Output {
-			t.Errorf("Expected %s, got %s", d.Output, addr)
-		}
-	}
 }
 
 func TestExtractEndpoint(t *testing.T) {

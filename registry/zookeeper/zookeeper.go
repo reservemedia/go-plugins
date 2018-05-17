@@ -29,6 +29,10 @@ func init() {
 	cmd.DefaultRegistries["zookeeper"] = NewRegistry
 }
 
+func (z *zookeeperRegistry) Options() registry.Options {
+	return z.options
+}
+
 func (z *zookeeperRegistry) Deregister(s *registry.Service) error {
 	if len(s.Nodes) == 0 {
 		return errors.New("Require at least one node")
@@ -216,8 +220,8 @@ func (z *zookeeperRegistry) String() string {
 	return "zookeeper"
 }
 
-func (z *zookeeperRegistry) Watch() (registry.Watcher, error) {
-	return newZookeeperWatcher(z)
+func (z *zookeeperRegistry) Watch(opts ...registry.WatchOption) (registry.Watcher, error) {
+	return newZookeeperWatcher(z, opts...)
 }
 
 func NewRegistry(opts ...registry.Option) registry.Registry {

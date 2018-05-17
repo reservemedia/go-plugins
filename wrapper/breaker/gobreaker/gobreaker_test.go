@@ -8,7 +8,7 @@ import (
 	"github.com/micro/go-micro/selector"
 	"github.com/sony/gobreaker"
 
-	"golang.org/x/net/context"
+	"context"
 )
 
 func TestBreaker(t *testing.T) {
@@ -25,9 +25,9 @@ func TestBreaker(t *testing.T) {
 		)),
 	)
 
-	req := c.NewJsonRequest("test.service", "Test.Method", map[string]string{
+	req := c.NewRequest("test.service", "Test.Method", map[string]string{
 		"foo": "bar",
-	})
+	}, client.WithContentType("application/json"))
 
 	var rsp map[string]interface{}
 
