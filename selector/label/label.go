@@ -1,3 +1,4 @@
+// Package label is a priority label based selector.
 package label
 
 import (
@@ -8,6 +9,14 @@ import (
 	"github.com/micro/go-micro/registry"
 	"github.com/micro/go-micro/selector"
 )
+
+/*
+   A priority based label selector. Rather than just returning nodes with specific labels
+   this selector orders the nodes based on a list of labels. If no labels match all the
+   nodes are still returned. The priority based label selector is useful for such things
+   as rudimentary AZ based routing where requests made to other services should remain
+   in the same AZ.
+*/
 
 type labelSelector struct {
 	so selector.Options

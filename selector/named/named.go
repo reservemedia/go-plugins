@@ -1,3 +1,4 @@
+// Package named provides a selector which returns the service name as the address
 package named
 
 import (

@@ -13,7 +13,7 @@ import (
 	"github.com/micro/go-micro/server"
 	"github.com/micro/go-micro/transport"
 	"github.com/micro/go-micro/transport/codec/json"
-	"github.com/nats-io/nats"
+	"github.com/nats-io/go-nats"
 )
 
 type ntport struct {

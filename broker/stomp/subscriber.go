@@ -8,7 +8,7 @@ import (
 type subscriber struct {
 	opts  broker.SubscribeOptions
 	topic string
-	sub *stomp.Subscription
+	sub   *stomp.Subscription
 }
 
 func (s *subscriber) Options() broker.SubscribeOptions {

@@ -56,7 +56,14 @@ func (o *otWrapper) Publish(ctx context.Context, p client.Message, opts ...clien
 	return o.Client.Publish(ctx, p, opts...)
 }
 
-// NewCallWrapper accepts an open tracing Trace and returns a Call Wrapper
+// NewClientWrapper accepts an open tracing Trace and returns a Client Wrapper
+func NewClientWrapper(ot opentracing.Tracer) client.Wrapper {
+	return func(c client.Client) client.Client {
+		return &otWrapper{ot, c}
+	}
+}
+
+// NewHandlerWrapper accepts an opentracing Tracer and returns a Call Wrapper
 func NewCallWrapper(ot opentracing.Tracer) client.CallWrapper {
 	return func(cf client.CallFunc) client.CallFunc {
 		return func(ctx context.Context, addr string, req client.Request, rsp interface{}, opts client.CallOptions) error {
@@ -66,16 +73,8 @@ func NewCallWrapper(ot opentracing.Tracer) client.CallWrapper {
 				return err
 			}
 			defer span.Finish()
-			err = cf(ctx, addr, req, rsp, opts)
-			return err
+			return cf(ctx, addr, req, rsp, opts)
 		}
-	}
-}
-
-// NewClientWrapper accepts an open tracing Trace and returns a Client Wrapper
-func NewClientWrapper(ot opentracing.Tracer) client.Wrapper {
-	return func(c client.Client) client.Client {
-		return &otWrapper{ot, c}
 	}
 }
 
